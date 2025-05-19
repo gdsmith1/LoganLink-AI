@@ -41,5 +41,5 @@ jobs:
         with:
           context: .
           push: true
-          tags: ghcr.io/${{ github.repository_owner }}/loganlinkai:latest
+          tags: ghcr.io/${{ github.repository_owner }}/loganlink-ai:latest
           platforms: linux/arm64/v8,linux/amd64
