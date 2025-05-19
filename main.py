@@ -2,11 +2,10 @@ import discord
 from discord.ext import commands
 import os
 import openai
-import time
-from elevenlabs.client import ElevenLabs
 import asyncio
 import io
 import dotenv
+from elevenlabs.client import ElevenLabs
 
 dotenv.load_dotenv()
 
@@ -25,6 +24,12 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 openai_client = openai.OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
 elevenlabs_client = ElevenLabs(api_key=os.getenv('ELEVENLABS_API_KEY'))
 
+# Global variables
+is_voice_active = False
+voice_client = None
+MODEL_ID = "ft:gpt-3.5-turbo-0125:personal:20250330200835:BH0ak1o7"
+VOICE_ID = "kGJWdLyKtBz7loQik2lE"
+
 def generate_audio(text):
     """Helper function to generate audio using ElevenLabs"""
     audio_stream = elevenlabs_client.text_to_speech.convert_as_stream(
@@ -33,41 +38,34 @@ def generate_audio(text):
         text=text,
         model_id="eleven_multilingual_v2",
     )
-
-    # Convert stream to bytes
     audio_bytes = io.BytesIO()
     for chunk in audio_stream:
         audio_bytes.write(chunk)
     audio_bytes.seek(0)
     return audio_bytes
 
-# Global variables
-is_voice_active = False
-voice_client = None
-MODEL_ID = "ft:gpt-3.5-turbo-0125:personal:20250330200835:BH0ak1o7"
-VOICE_ID = "kGJWdLyKtBz7loQik2lE"
-
 async def play_audio(ctx, audio_bytes):
     """Plays audio in voice channel if voice is active"""
     global voice_client
     if not is_voice_active:
         return
-
     if voice_client and voice_client.is_connected():
         if voice_client.is_playing():
             voice_client.stop()
-
         temp_file = "temp_audio.mp3"
         with open(temp_file, "wb") as f:
             f.write(audio_bytes.getvalue())
-
         voice_client.play(discord.FFmpegPCMAudio(temp_file))
-
         while voice_client.is_playing():
             await asyncio.sleep(0.1)
         os.remove(temp_file)
 
-@bot.command(name='loganlink activate')
+@bot.group()
+async def loganlink(ctx):
+    if ctx.invoked_subcommand is None:
+        await ctx.send('Invalid loganlink command passed. Use one of: activate, deactivate, say, chat, talk, repeat.')
+
+@loganlink.command()
 async def activate(ctx):
     """Activates the bot and joins your voice channel"""
     global is_voice_active, voice_client
@@ -76,7 +74,6 @@ async def activate(ctx):
             channel = ctx.author.voice.channel
             voice_client = await channel.connect()
             is_voice_active = True
-
             audio_bytes = generate_audio("Logan Link AI Online")
             await ctx.send(file=discord.File(audio_bytes, "activation.mp3"))
             await play_audio(ctx, audio_bytes)
@@ -86,7 +83,7 @@ async def activate(ctx):
     except Exception as e:
         await ctx.send(f"Error during voice activation: {str(e)}")
 
-@bot.command(name='loganlink deactivate')
+@loganlink.command()
 async def deactivate(ctx):
     """Disconnects the bot from voice channel"""
     global is_voice_active, voice_client
@@ -97,104 +94,77 @@ async def deactivate(ctx):
     else:
         await ctx.send("I'm not currently in a voice channel.")
 
-@bot.command(name='loganlink say')
+@loganlink.command()
 async def say(ctx, *, text):
     """Generates audio from text and sends it (plays in voice if activated)"""
     try:
         async with ctx.typing():
-            # Generate audio from text
             audio_bytes = generate_audio(text)
-
-            # Send both text and audio file
             await ctx.send(f"📝 Text: {text}")
             await ctx.send(file=discord.File(audio_bytes, "speech.mp3"))
-
-            # Only attempt to play in voice if voice is active
             if is_voice_active:
                 await play_audio(ctx, audio_bytes)
             else:
-                await ctx.send("Note: Voice playback is not active. Use !activate to enable voice channel features.")
-
+                await ctx.send("Note: Voice playback is not active. Use !loganlink activate to enable voice channel features.")
     except Exception as e:
         await ctx.send(f"Error generating audio: {str(e)}")
 
-@bot.command(name='loganlink talk')
+@loganlink.command()
 async def talk(ctx, *, question):
     """Chat with the AI using text and voice (if activated)"""
     try:
         async with ctx.typing():
-            # Get response from OpenAI
             messages = [
-                {"role": "system", "content": "You are a Logan, a discord user who lives most of their life playing video games and getting high.  You may have a short temper if you are offended.  Another user is talking to you.  Keep your responses coherent, but try to stay within one or two sentences."},
+                {"role": "system", "content": "You are a Logan, a discord user who lives most of their life playing video games and getting high.  You may have a short temper if you are offended. Answer as Logan would."},
                 {"role": "user", "content": question}
             ]
-
             response = openai_client.chat.completions.create(
                 model=MODEL_ID,
                 messages=messages
             )
-
             ai_response = response.choices[0].message.content
             audio_bytes = generate_audio(ai_response)
-
-            # Send text and audio file
             await ctx.send(ai_response)
             await ctx.send(file=discord.File(audio_bytes, "response.mp3"))
-
-            # Only attempt to play in voice if voice is active
             if is_voice_active:
                 await play_audio(ctx, audio_bytes)
             else:
-                await ctx.send("Note: Voice playback is not active. Use !activate to enable voice channel features.")
-
+                await ctx.send("Note: Voice playback is not active. Use !loganlink activate to enable voice channel features.")
     except Exception as e:
         await ctx.send(f"Error processing question: {str(e)}")
 
-@bot.command(name='loganlink chat')
+@loganlink.command()
 async def chat(ctx, *, message):
     """Chat with the AI using text only"""
     try:
         async with ctx.typing():
             messages = [
-                {"role": "system", "content": "You are a Logan, a discord user who lives most of their life playing video games and getting high.  You may have a short temper if you are offended.  Another user is talking to you.  Keep your response within one or two sentences."},
+                {"role": "system", "content": "You are a Logan, a discord user who lives most of their life playing video games and getting high.  You may have a short temper if you are offended. Answer as Logan would."},
                 {"role": "user", "content": message}
             ]
-
             response = openai_client.chat.completions.create(
                 model=MODEL_ID,
                 messages=messages
             )
-
             ai_response = response.choices[0].message.content
             await ctx.send(ai_response)
-
     except Exception as e:
         await ctx.send(f"Error during chat: {str(e)}")
 
-@bot.command(name='loganlink repeat')
+@loganlink.command()
 async def repeat(ctx):
     """Converts an uploaded audio file to speech using the bot's voice"""
     try:
-        # Check if a file was attached to the message
         if not ctx.message.attachments:
             await ctx.send("Please attach an audio file (MP3) with your command!")
             return
-
         attachment = ctx.message.attachments[0]
-
-        # Verify it's an audio file
         if not attachment.filename.lower().endswith('.mp3'):
             await ctx.send("Please provide an MP3 file!")
             return
-
         async with ctx.typing():
-            # Download the attached audio file
             audio_data = await attachment.read()
-
-            # Save temporary input file
             input_file = io.BytesIO(audio_data)
-
-            # Convert speech to speech using ElevenLabs
             try:
                 audio_stream = elevenlabs_client.speech_to_speech.convert_as_stream(
                     voice_id=VOICE_ID,
@@ -202,26 +172,18 @@ async def repeat(ctx):
                     output_format="mp3_44100_128",
                     model_id="eleven_multilingual_sts_v2"
                 )
-
-                # Convert stream to bytes
                 audio_bytes = io.BytesIO()
                 for chunk in audio_stream:
                     audio_bytes.write(chunk)
                 audio_bytes.seek(0)
-
-                # Send the converted audio file
                 await ctx.send("Here's your audio repeated in my voice:")
                 await ctx.send(file=discord.File(audio_bytes, "repeated_audio.mp3"))
-
-                # Play in voice channel if active
                 if is_voice_active:
                     await play_audio(ctx, audio_bytes)
                 else:
-                    await ctx.send("Note: Voice playback is not active. Use !activate to enable voice channel features.")
-
+                    await ctx.send("Note: Voice playback is not active. Use !loganlink activate to enable voice channel features.")
             except Exception as e:
                 await ctx.send(f"Error converting audio: {str(e)}")
-
     except Exception as e:
         await ctx.send(f"Error processing audio: {str(e)}")
 
