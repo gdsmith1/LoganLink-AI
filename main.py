@@ -67,7 +67,7 @@ async def play_audio(ctx, audio_bytes):
             await asyncio.sleep(0.1)
         os.remove(temp_file)
 
-@bot.command(name='activate')
+@bot.command(name='loganlink activate')
 async def activate(ctx):
     """Activates the bot and joins your voice channel"""
     global is_voice_active, voice_client
@@ -86,7 +86,7 @@ async def activate(ctx):
     except Exception as e:
         await ctx.send(f"Error during voice activation: {str(e)}")
 
-@bot.command(name='deactivate')
+@bot.command(name='loganlink deactivate')
 async def deactivate(ctx):
     """Disconnects the bot from voice channel"""
     global is_voice_active, voice_client
@@ -97,7 +97,7 @@ async def deactivate(ctx):
     else:
         await ctx.send("I'm not currently in a voice channel.")
 
-@bot.command(name='say')
+@bot.command(name'loganlink say')
 async def say(ctx, *, text):
     """Generates audio from text and sends it (plays in voice if activated)"""
     try:
@@ -118,14 +118,14 @@ async def say(ctx, *, text):
     except Exception as e:
         await ctx.send(f"Error generating audio: {str(e)}")
 
-@bot.command(name='talk')
+@bot.command(name'loganlink talk')
 async def talk(ctx, *, question):
     """Chat with the AI using text and voice (if activated)"""
     try:
         async with ctx.typing():
             # Get response from OpenAI
             messages = [
-                {"role": "system", "content": "You are a helpful AI assistant. Keep responses clear and concise."},
+                {"role": "system", "content": "You are a Logan, a discord user who lives most of their life playing video games and getting high.  You may have a short temper if you are offended.  Another user is talking to you.  Keep your responses coherent, but try to stay within one or two sentences."},
                 {"role": "user", "content": question}
             ]
 
@@ -150,13 +150,13 @@ async def talk(ctx, *, question):
     except Exception as e:
         await ctx.send(f"Error processing question: {str(e)}")
 
-@bot.command(name='chat')
+@bot.command(name'loganlink chat')
 async def chat(ctx, *, message):
     """Chat with the AI using text only"""
     try:
         async with ctx.typing():
             messages = [
-                {"role": "system", "content": "You are a helpful AI assistant."},
+                {"role": "system", "content": "You are a Logan, a discord user who lives most of their life playing video games and getting high.  You may have a short temper if you are offended.  Another user is talking to you.  Keep your response within one or two sentences."},
                 {"role": "user", "content": message}
             ]
 
@@ -171,7 +171,7 @@ async def chat(ctx, *, message):
     except Exception as e:
         await ctx.send(f"Error during chat: {str(e)}")
 
-@bot.command(name='repeat')
+@bot.command(name'loganlink repeat')
 async def repeat(ctx):
     """Converts an uploaded audio file to speech using the bot's voice"""
     try:
