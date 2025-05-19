@@ -42,7 +42,7 @@ def generate_audio(text):
     return audio_bytes
 
 # Global variables
-is_voice_active = False  # Renamed to be more specific
+is_voice_active = False
 voice_client = None
 MODEL_ID = "ft:gpt-3.5-turbo-0125:personal:20250330200835:BH0ak1o7"
 VOICE_ID = "kGJWdLyKtBz7loQik2lE"
@@ -97,7 +97,7 @@ async def deactivate(ctx):
     else:
         await ctx.send("I'm not currently in a voice channel.")
 
-@bot.command(name'loganlink say')
+@bot.command(name='loganlink say')
 async def say(ctx, *, text):
     """Generates audio from text and sends it (plays in voice if activated)"""
     try:
@@ -118,7 +118,7 @@ async def say(ctx, *, text):
     except Exception as e:
         await ctx.send(f"Error generating audio: {str(e)}")
 
-@bot.command(name'loganlink talk')
+@bot.command(name='loganlink talk')
 async def talk(ctx, *, question):
     """Chat with the AI using text and voice (if activated)"""
     try:
@@ -150,7 +150,7 @@ async def talk(ctx, *, question):
     except Exception as e:
         await ctx.send(f"Error processing question: {str(e)}")
 
-@bot.command(name'loganlink chat')
+@bot.command(name='loganlink chat')
 async def chat(ctx, *, message):
     """Chat with the AI using text only"""
     try:
@@ -171,7 +171,7 @@ async def chat(ctx, *, message):
     except Exception as e:
         await ctx.send(f"Error during chat: {str(e)}")
 
-@bot.command(name'loganlink repeat')
+@bot.command(name='loganlink repeat')
 async def repeat(ctx):
     """Converts an uploaded audio file to speech using the bot's voice"""
     try:
