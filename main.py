@@ -6,6 +6,7 @@ import asyncio
 import io
 import dotenv
 from elevenlabs.client import ElevenLabs
+import random
 
 dotenv.load_dotenv()
 
@@ -59,6 +60,39 @@ async def play_audio(ctx, audio_bytes):
         while voice_client.is_playing():
             await asyncio.sleep(0.1)
         os.remove(temp_file)
+
+@bot.event
+async def on_message(message):
+    # Ignore messages from bots
+    if message.author.bot:
+        return
+
+    # Ignore messages that start with "!"
+    if message.content.startswith("!"):
+        await bot.process_commands(message)
+        return
+
+    # 1 in 20 chance to respond as if "!loganlink chat"
+    if random.randint(1, 20) == 1:
+        ctx = await bot.get_context(message)
+        # Simulate the loganlink chat command
+        try:
+            # Use the same logic as the chat command
+            messages = [
+                {"role": "system", "content": "You are a Logan, a discord user who lives most of their life playing video games and getting high.  You may have a short temper if you are offended. Answer as Logan would."},
+                {"role": "user", "content": message.content}
+            ]
+            response = openai_client.chat.completions.create(
+                model=MODEL_ID,
+                messages=messages
+            )
+            ai_response = response.choices[0].message.content
+            await message.channel.send(ai_response)
+        except Exception as e:
+            await message.channel.send(f"Error during chat: {str(e)}")
+
+    # Always process commands
+    await bot.process_commands(message)
 
 @bot.group()
 async def loganlink(ctx):
