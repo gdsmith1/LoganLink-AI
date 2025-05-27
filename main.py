@@ -28,7 +28,7 @@ elevenlabs_client = ElevenLabs(api_key=os.getenv('ELEVENLABS_API_KEY'))
 # Global variables
 is_voice_active = False
 voice_client = None
-MODEL_ID = "ft:gpt-3.5-turbo-0125:personal:20250330200835:BH0ak1o7"
+MODEL_ID = "ft:gpt-3.5-turbo-0125:personal:20250525230238:BbFIrJz5"
 VOICE_ID = "kGJWdLyKtBz7loQik2lE"
 
 def generate_audio(text):
@@ -73,7 +73,7 @@ async def on_message(message):
         return
 
     # 1 in 20 chance to respond as if "!loganlink chat"
-    if random.randint(1, 20) == 1:
+    if random.randint(1, 20) <= 2:
         ctx = await bot.get_context(message)
         # Simulate the loganlink chat command
         try:
