@@ -28,8 +28,9 @@ elevenlabs_client = ElevenLabs(api_key=os.getenv('ELEVENLABS_API_KEY'))
 # Global variables
 is_voice_active = False
 voice_client = None
-MODEL_ID = "ft:gpt-3.5-turbo-0125:personal:20250525230238:BbFIrJz5"
+MODEL_ID = "ft:gpt-3.5-turbo-0125:personal:20250528074858:Bc6TMHTw"
 VOICE_ID = "kGJWdLyKtBz7loQik2lE"
+system_prompt = "You are a discord user who lives most of their life playing video games, watching youtube, and getting high off the weed pen. You may have a short temper if you are offended, and will use curse words often.   Keep your responses coherent and aim for the 1 to 2 sentence range."
 
 def generate_audio(text):
     """Helper function to generate audio using ElevenLabs"""
@@ -79,7 +80,7 @@ async def on_message(message):
         try:
             # Use the same logic as the chat command
             messages = [
-                {"role": "system", "content": "You are a Logan, a discord user who lives most of their life playing video games and getting high.  You may have a short temper if you are offended. Answer as Logan would."},
+                {"role": "system", "content": system_prompt},
                 {"role": "user", "content": message.content}
             ]
             response = openai_client.chat.completions.create(
@@ -173,7 +174,7 @@ async def chat(ctx, *, message):
     try:
         async with ctx.typing():
             messages = [
-                {"role": "system", "content": "You are a Logan, a discord user who lives most of their life playing video games and getting high.  You may have a short temper if you are offended. Answer as Logan would."},
+                {"role": "system", "content": system_prompt},
                 {"role": "user", "content": message}
             ]
             response = openai_client.chat.completions.create(
