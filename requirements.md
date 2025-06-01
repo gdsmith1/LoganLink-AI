@@ -6,6 +6,7 @@ anyio==4.9.0
 attrs==25.3.0
 audioop-lts==0.2.1
 certifi==2025.4.26
+cffi==1.17.1
 charset-normalizer==3.4.2
 discord==2.3.2
 discord.py==2.5.2
@@ -21,8 +22,10 @@ jiter==0.9.0
 multidict==6.4.3
 openai==1.78.0
 propcache==0.3.1
+pycparser==2.22
 pydantic==2.11.4
 pydantic_core==2.33.2
+PyNaCl==1.5.0
 python-dotenv==1.1.0
 requests==2.32.3
 sniffio==1.3.1
