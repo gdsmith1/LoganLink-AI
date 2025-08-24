@@ -28,9 +28,41 @@ elevenlabs_client = ElevenLabs(api_key=os.getenv('ELEVENLABS_API_KEY'))
 # Global variables
 is_voice_active = False
 voice_client = None
+dcspam_task = None
 MODEL_ID = "ft:gpt-3.5-turbo-0125:personal:20250528074858:Bc6TMHTw"
 VOICE_ID = "kGJWdLyKtBz7loQik2lE"
+TARGET_USER_ID = 240538966212739072
 system_prompt = "You are a discord user who lives most of their life playing video games, watching youtube, and getting high off the penjamin, cartjamin, geek bar, or zaza. You likely will use wild curse words often.   Keep your responses coherent and aim for the 1 to 2 sentence range.  You like to troll people and harrass them."
+
+async def _dcspam_target_loop(guild, channel):
+    """
+    Internal loop that disconnects the target user at random 1-5 second intervals
+    for 5 minutes (300 seconds). Sends a completion message when finished unless cancelled.
+    """
+    global dcspam_task
+    end_time = asyncio.get_event_loop().time() + 300  # 5 minutes
+    cancelled = False
+    try:
+        while asyncio.get_event_loop().time() < end_time:
+            member = guild.get_member(TARGET_USER_ID)
+            if member and member.voice:
+                try:
+                    await member.move_to(None, reason="Random dcspam prank")
+                except Exception:
+                    # If we lose permissions or another error occurs, abort loop
+                    break
+            # Sleep a random 1-5 seconds before next attempt
+            await asyncio.sleep(random.randint(1, 5))
+    except asyncio.CancelledError:
+        # Allow graceful cancellation
+        cancelled = True
+    finally:
+        dcspam_task = None
+        if not cancelled:
+            try:
+                await channel.send("DC spam sequence finished (5 minutes elapsed).")
+            except Exception:
+                pass
 
 def generate_audio(text):
     """Helper function to generate audio using ElevenLabs"""
@@ -221,6 +253,26 @@ async def repeat(ctx):
                 await ctx.send(f"Error converting audio: {str(e)}")
     except Exception as e:
         await ctx.send(f"Error processing audio: {str(e)}")
+
+@loganlink.command()
+async def dcspam(ctx):
+    """Toggles a 5 minute disconnect spam on the hardcoded target user (1-5s intervals)."""
+    global dcspam_task
+    # If running, cancel (toggle off)
+    if dcspam_task and not dcspam_task.done():
+        dcspam_task.cancel()
+        dcspam_task = None
+        await ctx.send("DC spam sequence cancelled.")
+        return
+
+    # Start new sequence (toggle on)
+    guild = ctx.guild
+    member = guild.get_member(TARGET_USER_ID)
+    if not member:
+        await ctx.send("Target user not found in this server (or bot lacks member intent).")
+        return
+    dcspam_task = asyncio.create_task(_dcspam_target_loop(guild, ctx.channel))
+    await ctx.send("Started 5 minute DC spam sequence on the target user. Run the command again to cancel early.")
 
 # Run the bot
 bot.run(os.getenv('DISCORD_BOT_TOKEN'))
