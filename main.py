@@ -11,10 +11,13 @@ import random
 dotenv.load_dotenv()
 
 # Verify environment variables
-required_env_vars = ['OPENAI_API_KEY', 'ELEVENLABS_API_KEY', 'DISCORD_BOT_TOKEN']
+required_env_vars = ['OPENAI_API_KEY', 'DISCORD_BOT_TOKEN']
 for var in required_env_vars:
     if not os.getenv(var):
         raise ValueError(f"Missing required environment variable: {var}")
+
+# Check if ElevenLabs API key is available
+has_voice_capability = bool(os.getenv('ELEVENLABS_API_KEY'))
 
 # Setup
 intents = discord.Intents.default()
@@ -23,49 +26,54 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 
 # API Clients
 openai_client = openai.OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
-elevenlabs_client = ElevenLabs(api_key=os.getenv('ELEVENLABS_API_KEY'))
+elevenlabs_client = None
+if has_voice_capability:
+    elevenlabs_client = ElevenLabs(api_key=os.getenv('ELEVENLABS_API_KEY'))
 
 # Global variables
 is_voice_active = False
 voice_client = None
-dcspam_task = None
+# dcspam_task = None  # Commented out - may be needed later
 MODEL_ID = "ft:gpt-3.5-turbo-0125:personal:20250528074858:Bc6TMHTw"
 VOICE_ID = "kGJWdLyKtBz7loQik2lE"
 TARGET_USER_ID = 240538966212739072
 system_prompt = "You are a discord user who lives most of their life playing video games, watching youtube, and getting high off the penjamin, cartjamin, geek bar, or zaza. You likely will use wild curse words often.   Keep your responses coherent and aim for the 1 to 2 sentence range.  You like to troll people and harrass them."
 
-async def _dcspam_target_loop(guild, channel):
-    """
-    Internal loop that disconnects the target user at random 1-5 second intervals
-    for 5 minutes (300 seconds). Sends a completion message when finished unless cancelled.
-    """
-    global dcspam_task
-    end_time = asyncio.get_event_loop().time() + 300  # 5 minutes
-    cancelled = False
-    try:
-        while asyncio.get_event_loop().time() < end_time:
-            member = guild.get_member(TARGET_USER_ID)
-            if member and member.voice:
-                try:
-                    await member.move_to(None, reason="Random dcspam prank")
-                except Exception:
-                    # If we lose permissions or another error occurs, abort loop
-                    break
-            # Sleep a random 1-5 seconds before next attempt
-            await asyncio.sleep(random.randint(1, 5))
-    except asyncio.CancelledError:
-        # Allow graceful cancellation
-        cancelled = True
-    finally:
-        dcspam_task = None
-        if not cancelled:
-            try:
-                await channel.send("DC spam sequence finished (5 minutes elapsed).")
-            except Exception:
-                pass
+# async def _dcspam_target_loop(guild, channel):
+#     """
+#     Internal loop that disconnects the target user at random 1-5 second intervals
+#     for 5 minutes (300 seconds). Sends a completion message when finished unless cancelled.
+#     """
+#     global dcspam_task
+#     end_time = asyncio.get_event_loop().time() + 300  # 5 minutes
+#     cancelled = False
+#     try:
+#         while asyncio.get_event_loop().time() < end_time:
+#             member = guild.get_member(TARGET_USER_ID)
+#             if member and member.voice:
+#                 try:
+#                     await member.move_to(None, reason="Random dcspam prank")
+#                 except Exception:
+#                     # If we lose permissions or another error occurs, abort loop
+#                     break
+#             # Sleep a random 1-5 seconds before next attempt
+#             await asyncio.sleep(random.randint(1, 5))
+#     except asyncio.CancelledError:
+#         # Allow graceful cancellation
+#         cancelled = True
+#     finally:
+#         dcspam_task = None
+#         if not cancelled:
+#             try:
+#                 await channel.send("DC spam sequence finished (5 minutes elapsed).")
+#             except Exception:
+#                 pass
 
 def generate_audio(text):
     """Helper function to generate audio using ElevenLabs"""
+    if not has_voice_capability or not elevenlabs_client:
+        return None
+
     audio_stream = elevenlabs_client.text_to_speech.convert_as_stream(
         voice_id=VOICE_ID,
         output_format="mp3_44100_128",
@@ -80,8 +88,10 @@ def generate_audio(text):
 
 async def play_audio(ctx, audio_bytes):
     """Plays audio in voice channel if voice is active"""
+    if not has_voice_capability:
+        return
     global voice_client
-    if not is_voice_active:
+    if not is_voice_active or not audio_bytes:
         return
     if voice_client and voice_client.is_connected():
         if voice_client.is_playing():
@@ -130,75 +140,87 @@ async def on_message(message):
 @bot.group()
 async def loganlink(ctx):
     if ctx.invoked_subcommand is None:
-        await ctx.send('Invalid loganlink command passed. Use one of: activate, deactivate, say, chat, talk, repeat.')
-
-@loganlink.command()
-async def activate(ctx):
-    """Activates the bot and joins your voice channel"""
-    global is_voice_active, voice_client
-    try:
-        if ctx.author.voice:
-            channel = ctx.author.voice.channel
-            voice_client = await channel.connect()
-            is_voice_active = True
-            audio_bytes = generate_audio("Logan Link AI Online")
-            await ctx.send(file=discord.File(audio_bytes, "activation.mp3"))
-            await play_audio(ctx, audio_bytes)
-            await ctx.send("Voice activation successful. Connected to voice channel.")
+        if has_voice_capability:
+            await ctx.send('Invalid loganlink command passed. Use one of: activate, deactivate, say, chat, talk, repeat.')
         else:
-            await ctx.send("You need to be in a voice channel to activate voice features.")
-    except Exception as e:
-        await ctx.send(f"Error during voice activation: {str(e)}")
+            await ctx.send('Invalid loganlink command passed. Use one of: chat.')
 
-@loganlink.command()
-async def deactivate(ctx):
-    """Disconnects the bot from voice channel"""
-    global is_voice_active, voice_client
-    if voice_client and voice_client.is_connected():
-        await voice_client.disconnect()
-        is_voice_active = False
-        await ctx.send("Voice deactivated and disconnected from voice channel.")
-    else:
-        await ctx.send("I'm not currently in a voice channel.")
-
-@loganlink.command()
-async def say(ctx, *, text):
-    """Generates audio from text and sends it (plays in voice if activated)"""
-    try:
-        async with ctx.typing():
-            audio_bytes = generate_audio(text)
-            await ctx.send(f"📝 Text: {text}")
-            await ctx.send(file=discord.File(audio_bytes, "speech.mp3"))
-            if is_voice_active:
-                await play_audio(ctx, audio_bytes)
+if has_voice_capability:
+    @loganlink.command()
+    async def activate(ctx):
+        """Activates the bot and joins your voice channel"""
+        global is_voice_active, voice_client
+        try:
+            if ctx.author.voice:
+                channel = ctx.author.voice.channel
+                voice_client = await channel.connect()
+                is_voice_active = True
+                audio_bytes = generate_audio("Logan Link AI Online")
+                if audio_bytes:
+                    await ctx.send(file=discord.File(audio_bytes, "activation.mp3"))
+                    await play_audio(ctx, audio_bytes)
+                await ctx.send("Voice activation successful. Connected to voice channel.")
             else:
-                await ctx.send("Note: Voice playback is not active. Use !loganlink activate to enable voice channel features.")
-    except Exception as e:
-        await ctx.send(f"Error generating audio: {str(e)}")
+                await ctx.send("You need to be in a voice channel to activate voice features.")
+        except Exception as e:
+            await ctx.send(f"Error during voice activation: {str(e)}")
 
-@loganlink.command()
-async def talk(ctx, *, question):
-    """Chat with the AI using text and voice (if activated)"""
-    try:
-        async with ctx.typing():
-            messages = [
-                {"role": "system", "content": "You are a Logan, a discord user who lives most of their life playing video games and getting high.  You may have a short temper if you are offended. Answer as Logan would."},
-                {"role": "user", "content": question}
-            ]
-            response = openai_client.chat.completions.create(
-                model=MODEL_ID,
-                messages=messages
-            )
-            ai_response = response.choices[0].message.content
-            audio_bytes = generate_audio(ai_response)
-            await ctx.send(ai_response)
-            await ctx.send(file=discord.File(audio_bytes, "response.mp3"))
-            if is_voice_active:
-                await play_audio(ctx, audio_bytes)
-            else:
-                await ctx.send("Note: Voice playback is not active. Use !loganlink activate to enable voice channel features.")
-    except Exception as e:
-        await ctx.send(f"Error processing question: {str(e)}")
+    @loganlink.command()
+    async def deactivate(ctx):
+        """Disconnects the bot from voice channel"""
+        global is_voice_active, voice_client
+        if voice_client and voice_client.is_connected():
+            await voice_client.disconnect()
+            is_voice_active = False
+            await ctx.send("Voice deactivated and disconnected from voice channel.")
+        else:
+            await ctx.send("I'm not currently in a voice channel.")
+
+if has_voice_capability:
+    @loganlink.command()
+    async def say(ctx, *, text):
+        """Generates audio from text and sends it (plays in voice if activated)"""
+        try:
+            async with ctx.typing():
+                audio_bytes = generate_audio(text)
+                await ctx.send(f"📝 Text: {text}")
+                if audio_bytes:
+                    await ctx.send(file=discord.File(audio_bytes, "speech.mp3"))
+                    if is_voice_active:
+                        await play_audio(ctx, audio_bytes)
+                    else:
+                        await ctx.send("Note: Voice playback is not active. Use !loganlink activate to enable voice channel features.")
+                else:
+                    await ctx.send("Failed to generate audio.")
+        except Exception as e:
+            await ctx.send(f"Error generating audio: {str(e)}")
+
+if has_voice_capability:
+    @loganlink.command()
+    async def talk(ctx, *, question):
+        """Chat with the AI using text and voice (if activated)"""
+        try:
+            async with ctx.typing():
+                messages = [
+                    {"role": "system", "content": "You are a Logan, a discord user who lives most of their life playing video games and getting high.  You may have a short temper if you are offended. Answer as Logan would."},
+                    {"role": "user", "content": question}
+                ]
+                response = openai_client.chat.completions.create(
+                    model=MODEL_ID,
+                    messages=messages
+                )
+                ai_response = response.choices[0].message.content
+                await ctx.send(ai_response)
+
+                audio_bytes = generate_audio(ai_response)
+                if audio_bytes:
+                    await ctx.send(file=discord.File(audio_bytes, "response.mp3"))
+                    if is_voice_active:
+                        await play_audio(ctx, audio_bytes)
+                    else:
+                        await ctx.send("Note: Voice playback is not active. Use !loganlink activate to enable voice channel features.")
+        except Exception as e:
+            await ctx.send(f"Error processing question: {str(e)}")
 
 @loganlink.command()
 async def chat(ctx, *, message):
@@ -218,61 +240,62 @@ async def chat(ctx, *, message):
     except Exception as e:
         await ctx.send(f"Error during chat: {str(e)}")
 
-@loganlink.command()
-async def repeat(ctx):
-    """Converts an uploaded audio file to speech using the bot's voice"""
-    try:
-        if not ctx.message.attachments:
-            await ctx.send("Please attach an audio file (MP3) with your command!")
-            return
-        attachment = ctx.message.attachments[0]
-        if not attachment.filename.lower().endswith('.mp3'):
-            await ctx.send("Please provide an MP3 file!")
-            return
-        async with ctx.typing():
-            audio_data = await attachment.read()
-            input_file = io.BytesIO(audio_data)
-            try:
-                audio_stream = elevenlabs_client.speech_to_speech.convert_as_stream(
-                    voice_id=VOICE_ID,
-                    audio=input_file,
-                    output_format="mp3_44100_128",
-                    model_id="eleven_multilingual_sts_v2"
-                )
-                audio_bytes = io.BytesIO()
-                for chunk in audio_stream:
-                    audio_bytes.write(chunk)
-                audio_bytes.seek(0)
-                await ctx.send("Here's your audio repeated in my voice:")
-                await ctx.send(file=discord.File(audio_bytes, "repeated_audio.mp3"))
-                if is_voice_active:
-                    await play_audio(ctx, audio_bytes)
-                else:
-                    await ctx.send("Note: Voice playback is not active. Use !loganlink activate to enable voice channel features.")
-            except Exception as e:
-                await ctx.send(f"Error converting audio: {str(e)}")
-    except Exception as e:
-        await ctx.send(f"Error processing audio: {str(e)}")
+if has_voice_capability:
+    @loganlink.command()
+    async def repeat(ctx):
+        """Converts an uploaded audio file to speech using the bot's voice"""
+        try:
+            if not ctx.message.attachments:
+                await ctx.send("Please attach an audio file (MP3) with your command!")
+                return
+            attachment = ctx.message.attachments[0]
+            if not attachment.filename.lower().endswith('.mp3'):
+                await ctx.send("Please provide an MP3 file!")
+                return
+            async with ctx.typing():
+                audio_data = await attachment.read()
+                input_file = io.BytesIO(audio_data)
+                try:
+                    audio_stream = elevenlabs_client.speech_to_speech.convert_as_stream(
+                        voice_id=VOICE_ID,
+                        audio=input_file,
+                        output_format="mp3_44100_128",
+                        model_id="eleven_multilingual_sts_v2"
+                    )
+                    audio_bytes = io.BytesIO()
+                    for chunk in audio_stream:
+                        audio_bytes.write(chunk)
+                    audio_bytes.seek(0)
+                    await ctx.send("Here's your audio repeated in my voice:")
+                    await ctx.send(file=discord.File(audio_bytes, "repeated_audio.mp3"))
+                    if is_voice_active:
+                        await play_audio(ctx, audio_bytes)
+                    else:
+                        await ctx.send("Note: Voice playback is not active. Use !loganlink activate to enable voice channel features.")
+                except Exception as e:
+                    await ctx.send(f"Error converting audio: {str(e)}")
+        except Exception as e:
+            await ctx.send(f"Error processing audio: {str(e)}")
 
-@loganlink.command()
-async def dcspam(ctx):
-    """Toggles a 5 minute disconnect spam on the hardcoded target user (1-5s intervals)."""
-    global dcspam_task
-    # If running, cancel (toggle off)
-    if dcspam_task and not dcspam_task.done():
-        dcspam_task.cancel()
-        dcspam_task = None
-        await ctx.send("DC spam sequence cancelled.")
-        return
-
-    # Start new sequence (toggle on)
-    guild = ctx.guild
-    member = guild.get_member(TARGET_USER_ID)
-    if not member:
-        await ctx.send("Target user not found in this server (or bot lacks member intent).")
-        return
-    dcspam_task = asyncio.create_task(_dcspam_target_loop(guild, ctx.channel))
-    await ctx.send("Started 5 minute DC spam sequence on the target user. Run the command again to cancel early.")
+# @loganlink.command()
+# async def dcspam(ctx):
+#     """Toggles a 5 minute disconnect spam on the hardcoded target user (1-5s intervals)."""
+#     global dcspam_task
+#     # If running, cancel (toggle off)
+#     if dcspam_task and not dcspam_task.done():
+#         dcspam_task.cancel()
+#         dcspam_task = None
+#         await ctx.send("DC spam sequence cancelled.")
+#         return
+#
+#     # Start new sequence (toggle on)
+#     guild = ctx.guild
+#     member = guild.get_member(TARGET_USER_ID)
+#     if not member:
+#         await ctx.send("Target user not found in this server (or bot lacks member intent).")
+#         return
+#     dcspam_task = asyncio.create_task(_dcspam_target_loop(guild, ctx.channel))
+#     await ctx.send("Started 5 minute DC spam sequence on the target user. Run the command again to cancel early.")
 
 # Run the bot
 bot.run(os.getenv('DISCORD_BOT_TOKEN'))
